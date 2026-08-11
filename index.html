@@ -481,8 +481,13 @@ function startScanner() {
 }
 
 
+
 /**************************************************
  * EMPLOYEE AUTHENTICATION
+ *
+ * Uses JSONP instead of fetch() because this page
+ * is hosted on GitHub Pages and the backend is
+ * hosted on Google Apps Script.
  **************************************************/
 
 function authenticateEmployee() {
@@ -502,57 +507,146 @@ function authenticateEmployee() {
     document.getElementById("result").className =
       "rejected";
 
-
     document.getElementById("result").innerHTML =
       "✕ EMPLOYEE AUTHENTICATION REQUIRED";
-
 
     return;
 
   }
 
 
-  document.getElementById("result").className =
+  const resultDiv =
+    document.getElementById("result");
+
+
+  resultDiv.className =
     "waiting";
 
 
-  document.getElementById("result").innerHTML =
+  resultDiv.innerHTML =
     "AUTHENTICATING...";
 
 
-  const authUrl =
+  /**************************************************
+   * CREATE JSONP CALLBACK
+   **************************************************/
+
+  const callbackName =
+    "authCallback_" + Date.now();
+
+
+  window[callbackName] =
+    function(data) {
+
+      try {
+
+        if (!data.valid) {
+
+          resultDiv.className =
+            "rejected";
+
+
+          resultDiv.innerHTML =
+            "✕ AUTHENTICATION FAILED<br><br>" +
+            escapeHtml(
+              data.message ||
+              "Employee authentication failed."
+            );
+
+          return;
+
+        }
+
+
+        /*
+         * Authentication succeeded.
+         *
+         * Remove the one-time authorization code
+         * from the visible browser URL.
+         */
+
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname
+        );
+
+
+        /*
+         * Start the camera only after successful
+         * employee authentication.
+         */
+
+        startScanner();
+
+      }
+
+      finally {
+
+        delete window[callbackName];
+
+      }
+
+    };
+
+
+  /**************************************************
+   * CREATE JSONP SCRIPT REQUEST
+   **************************************************/
+
+  const script =
+    document.createElement("script");
+
+
+  script.src =
     API_URL +
     "?api=auth" +
     "&code=" +
-    encodeURIComponent(authCode);
+    encodeURIComponent(authCode) +
+    "&callback=" +
+    encodeURIComponent(callbackName);
 
 
-  fetch(authUrl)
+  script.onerror =
+    function() {
 
-    .then(function(response) {
+      delete window[callbackName];
 
-      if (!response.ok) {
 
-        throw new Error(
-          "Authentication request failed."
-        );
+      resultDiv.className =
+        "rejected";
+
+
+      resultDiv.innerHTML =
+        "✕ AUTHENTICATION FAILED<br><br>" +
+        "Unable to contact the employee authentication system.";
+
+    };
+
+
+  document.body.appendChild(script);
+
+
+  /**************************************************
+   * CLEAN UP REQUEST AFTER 10 SECONDS
+   **************************************************/
+
+  setTimeout(
+    function() {
+
+      if (script.parentNode) {
+
+        script.parentNode.removeChild(script);
 
       }
 
-      return response.json();
+      delete window[callbackName];
 
-    })
+    },
+    10000
+  );
 
-    .then(function(data) {
-
-      if (!data.valid) {
-
-        throw new Error(
-          data.message ||
-          "Employee authentication failed."
-        );
-
-      }
+}
 
 
       /*
