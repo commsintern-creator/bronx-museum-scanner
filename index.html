@@ -340,10 +340,12 @@
             "none";
 
           document.getElementById("scanner-section").style.display =
-            "block";
+  "block";
 
 
-          startScanner();
+setTimeout(function() {
+  startScanner();
+}, 1000);
 
         } finally {
 
